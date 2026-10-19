@@ -128,20 +128,7 @@ input[type=text],input[type=date],input[type=number].plain{width:100%;font-size:
     </div>
   </div>
 
-  <div class="people">
-    <div class="person a">
-      <div class="name" id="nameA"></div>
-      <div class="bal" id="balA"></div>
-      <div class="small"><span>Пришло</span><span class="plus" id="incA"></span></div>
-      <div class="small"><span>Ушло</span><span class="minus" id="expA"></span></div>
-    </div>
-    <div class="person b">
-      <div class="name" id="nameB"></div>
-      <div class="bal" id="balB"></div>
-      <div class="small"><span>Пришло</span><span class="plus" id="incB"></span></div>
-      <div class="small"><span>Ушло</span><span class="minus" id="expB"></span></div>
-    </div>
-  </div>
+  <div class="people" id="people"></div>
 
   <div class="actions">
     <button class="btn-inc" id="addInc">＋ Доход</button>
@@ -200,27 +187,32 @@ input[type=text],input[type=date],input[type=number].plain{width:100%;font-size:
   <div class="sheet">
     <h3><span>Настройки</span><button data-close aria-label="Закрыть">✕</button></h3>
     <div class="field">
-      <label>Имена</label>
-      <div class="two">
-        <input type="text" id="setNameA">
-        <input type="text" id="setNameB">
-      </div>
-    </div>
-    <div class="field">
       <label>Сколько денег было на счету в начале (€)</label>
-      <div class="two">
-        <input type="number" class="plain" id="setStartA" inputmode="decimal" step="0.01">
-        <input type="number" class="plain" id="setStartB" inputmode="decimal" step="0.01">
-      </div>
+      <div class="two" id="startFields"></div>
     </div>
     <button class="save inc" id="saveSet" style="margin-bottom:18px">Сохранить настройки</button>
 
+    <div class="field"><label>Кто ты?</label></div>
+    <div class="who" id="setRole" style="margin-bottom:18px"></div>
+
     <div class="field"><label>Обмен данными</label></div>
-    <p class="hint">Данные хранятся в этом браузере. Чтобы у мужа было то же самое: сохрани файл и отправь ему, он нажмёт «Загрузить файл». Записи объединяются, ничего не теряется.</p>
+    <p class="hint">Записи хранятся в этом телефоне. Чтобы увидеть записи второго человека: он нажимает «Сохранить данные в файл» и отправляет файл тебе, ты нажимаешь «Загрузить файл». Записи объединяются, ничего не теряется.</p>
     <button class="set-btn" id="exportBtn">📤 Сохранить данные в файл</button>
     <button class="set-btn" id="importBtn">📥 Загрузить файл</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
     <button class="set-btn danger" id="resetBtn">🗑 Удалить все данные</button>
+  </div>
+</div>
+
+<!-- Choose role -->
+<div class="overlay" id="roleModal">
+  <div class="sheet">
+    <h3><span>👋 Кто ты?</span></h3>
+    <p class="hint" style="font-size:15px">Выбери один раз, чтобы колонки подписались правильно. Потом можно поменять в ⚙️.</p>
+    <div class="who">
+      <button class="a" data-role="a" style="padding:22px 12px;font-size:18px">👩 Я жена</button>
+      <button class="b" data-role="b" style="padding:22px 12px;font-size:18px">👨 Я муж</button>
+    </div>
   </div>
 </div>
 
@@ -263,6 +255,16 @@ function load(){
 let S = load();
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Не получилось сохранить в браузере'); } }
 
+/* Колонка a — жена, b — муж. На каждом телефоне свой выбор «кто я». */
+const ROLE_KEY = 'nash-budget-role';
+const ROLE = {a:'Жена', b:'Муж'};
+let me = null;
+try{ const r = localStorage.getItem(ROLE_KEY); if(r==='a'||r==='b') me = r; }catch(e){}
+const other = () => me === 'b' ? 'a' : 'b';
+const label = w => w === me ? 'Я' : ROLE[w];
+const order = () => me === 'b' ? ['b','a'] : ['a','b'];
+function setRole(r){ me = r; try{ localStorage.setItem(ROLE_KEY, r); }catch(e){} }
+
 const $ = id => document.getElementById(id);
 const fmt = n => (Math.round(n*100)/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
 const pad = n => String(n).padStart(2,'0');
@@ -297,18 +299,16 @@ function render(){
   $('mInc').textContent = '+' + fmt(all.inc);
   $('mExp').textContent = '−' + fmt(all.exp);
 
-  ['a','b'].forEach(w => {
-    const W = w.toUpperCase();
+  $('people').innerHTML = order().map(w => {
     const s = sums(monthTx.filter(t => t.who===w));
-    $('name'+W).textContent = S.names[w];
-    $('bal'+W).textContent = fmt(balance(w));
-    $('inc'+W).textContent = '+' + fmt(s.inc);
-    $('exp'+W).textContent = '−' + fmt(s.exp);
-  });
+    return `<div class="person ${w}"><div class="name">${label(w)}</div><div class="bal">${fmt(balance(w))}</div>
+      <div class="small"><span>Пришло</span><span class="plus">+${fmt(s.inc)}</span></div>
+      <div class="small"><span>Ушло</span><span class="minus">−${fmt(s.exp)}</span></div></div>`;
+  }).join('');
 
   // filter tabs
-  $('filterTabs').innerHTML = [['all','Вместе'],['a',S.names.a],['b',S.names.b]]
-    .map(([k,n]) => `<button data-f="${k}" class="${filter===k?'on':''}">${esc(n)}</button>`).join('');
+  $('filterTabs').innerHTML = [['all','Вместе'], ...order().map(w => [w, label(w)])]
+    .map(([k,n]) => `<button data-f="${k}" class="${filter===k?'on':''}">${n}</button>`).join('');
 
   renderPie(monthTx);
   renderBars();
@@ -381,7 +381,7 @@ function renderList(monthTx){
     }
     const c = catById(t.cat), isInc = t.type==='inc';
     const col = t.who==='a' ? 'var(--a)' : 'var(--b)';
-    html += `<div class="tx"><div class="em">${c.e}</div><div class="mid"><div class="t1">${c.n}</div><div class="t2"><span class="tag" style="background:${col}">${esc(S.names[t.who])}</span>${esc(t.note||'')}</div></div><div class="sum ${isInc?'plus':'minus'}">${isInc?'+':'−'}${fmt(t.amount)}</div><button class="del" data-del="${t.id}" aria-label="Удалить">✕</button></div>`;
+    html += `<div class="tx"><div class="em">${c.e}</div><div class="mid"><div class="t1">${c.n}</div><div class="t2"><span class="tag" style="background:${col}">${label(t.who)}</span>${esc(t.note||'')}</div></div><div class="sum ${isInc?'plus':'minus'}">${isInc?'+':'−'}${fmt(t.amount)}</div><button class="del" data-del="${t.id}" aria-label="Удалить">✕</button></div>`;
   });
   $('txList').innerHTML = html;
 }
@@ -389,7 +389,7 @@ function renderList(monthTx){
 /* ---------- add operation ---------- */
 let form = {type:'exp', who:'a', cat:null};
 function openTx(type){
-  form = {type, who: form.who || 'a', cat:null};
+  form = {type, who: me || 'a', cat:null};
   $('txTitle').textContent = type==='inc' ? 'Новый доход' : 'Новый расход';
   $('saveTx').className = 'save ' + type;
   $('amount').value=''; $('note').value=''; $('err').style.display='none';
@@ -400,7 +400,7 @@ function openTx(type){
   setTimeout(()=>$('amount').focus(), 150);
 }
 function drawWho(){
-  $('whoBtns').innerHTML = ['a','b'].map(w => `<button data-who="${w}" class="${w} ${form.who===w?'on':''}">${esc(S.names[w])}</button>`).join('');
+  $('whoBtns').innerHTML = order().map(w => `<button data-who="${w}" class="${w} ${form.who===w?'on':''}">${label(w)}</button>`).join('');
 }
 function drawCats(){
   const list = form.type==='inc' ? INC_CATS : EXP_CATS;
@@ -439,19 +439,22 @@ document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeAll(); });
 
 /* ---------- settings ---------- */
-$('openSettings').onclick = () => {
-  $('setNameA').value=S.names.a; $('setNameB').value=S.names.b;
-  $('setStartA').value=S.start.a||''; $('setStartB').value=S.start.b||'';
-  $('setStartA').placeholder=S.names.a; $('setStartB').placeholder=S.names.b;
-  $('setModal').classList.add('open');
-};
+function drawSettings(){
+  $('startFields').innerHTML = order().map(w => `<div><div class="hint" style="margin-bottom:4px">${label(w)}</div><input type="number" class="plain" id="start_${w}" inputmode="decimal" step="0.01"></div>`).join('');
+  order().forEach(w => { $('start_'+w).value = S.start[w] || ''; });
+  $('setRole').innerHTML = ['a','b'].map(w => `<button data-role="${w}" class="${w} ${me===w?'on':''}">${w==='a'?'👩 Я жена':'👨 Я муж'}</button>`).join('');
+}
+$('openSettings').onclick = () => { drawSettings(); $('setModal').classList.add('open'); };
 $('saveSet').onclick = () => {
-  S.names.a = $('setNameA').value.trim() || 'Я';
-  S.names.b = $('setNameB').value.trim() || 'Муж';
-  S.start.a = parseFloat(String($('setStartA').value).replace(',','.')) || 0;
-  S.start.b = parseFloat(String($('setStartB').value).replace(',','.')) || 0;
+  S.start.a = parseFloat(String($('start_a').value).replace(',','.')) || 0;
+  S.start.b = parseFloat(String($('start_b').value).replace(',','.')) || 0;
   save(); closeAll(); render(); toast('Сохранено ✅');
 };
+$('setRole').addEventListener('click', e => { const b=e.target.closest('[data-role]'); if(b){ setRole(b.dataset.role); drawSettings(); render(); } });
+document.querySelector('#roleModal').addEventListener('click', e => {
+  const b = e.target.closest('[data-role]'); if(!b) return;
+  setRole(b.dataset.role); $('roleModal').classList.remove('open'); render();
+});
 $('exportBtn').onclick = () => {
   const blob = new Blob([JSON.stringify(S,null,2)], {type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'budget-'+todayStr()+'.json';
@@ -467,7 +470,6 @@ $('importFile').onchange = e => {
       if(!Array.isArray(d.tx)) throw 0;
       const ids = new Set(S.tx.map(t => t.id)); let added = 0;
       d.tx.forEach(t => { if(t && t.id && !ids.has(t.id) && typeof t.amount==='number' && t.date){ S.tx.push(t); added++; } });
-      if(d.names && S.names.a==='Я' && S.names.b==='Муж') S.names = {...S.names, ...d.names};
       save(); closeAll(); render(); toast('Добавлено записей: '+added);
     }catch(err){ toast('Это не файл бюджета'); }
     e.target.value='';
@@ -479,6 +481,7 @@ $('resetBtn').onclick = () => {
 };
 
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', render);
+if(!me) $('roleModal').classList.add('open');
 render();
 </script>
 </body>
